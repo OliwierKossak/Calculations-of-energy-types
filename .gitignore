@@ -278,5 +278,6 @@ $RECYCLE.BIN/
 __pycache__
 venv
 .idea/
+energy_calc.db
 
 # End of https://www.gitignore.io/api/linux,macos,python,pycharm,windows,visualstudiocode
