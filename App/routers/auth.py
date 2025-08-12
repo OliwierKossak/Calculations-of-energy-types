@@ -7,6 +7,7 @@ from datetime import datetime
 from starlette import status
 from ..database import get_db
 from passlib.context import CryptContext
+from fastapi.security import OAuth2PasswordRequestForm
 
 bcrypt_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
@@ -26,6 +27,15 @@ class UserRequestModel(BaseModel):
     creation_date: datetime
 
 
+def authenticate_user(email: str, password: str, db: db_dependency):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        return False
+    if not bcrypt_context.verify(password, user.password):
+        return False
+    return True
+
+
 @router.post('/',status_code=status.HTTP_201_CREATED)
 async def create_user(db: db_dependency, user_request: UserRequestModel):
     create_user_model = User(
@@ -40,6 +50,9 @@ async def create_user(db: db_dependency, user_request: UserRequestModel):
     db.commit()
 
 @router.post('/token')
-async def login_for_access_token():
-    return 'token'
+async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: db_dependency):
+    user = authenticate_user(form_data.username, form_data.password, db)
+    if not user:
+        return HTTPException(status_code=404, detail='Failed Authentication')
+    return form_data.username
 
