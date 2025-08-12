@@ -39,3 +39,7 @@ async def create_user(db: db_dependency, user_request: UserRequestModel):
     db.add(create_user_model)
     db.commit()
 
+@router.post('/token')
+async def login_for_access_token():
+    return 'token'
+
