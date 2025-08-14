@@ -8,8 +8,8 @@ from datetime import datetime
 from starlette import status
 from ..database import get_db
 from passlib.context import CryptContext
-from fastapi.security import OAuth2PasswordRequestForm
-from jose import jwt
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from jose import jwt, JWTError
 
 SECRET_KEY = 'bda4eea505e79437178ef7363b92563ca4a9d1d9d737d2c218b24e3b69b8cf6c'
 ALGORITHM = 'HS256'
@@ -22,6 +22,9 @@ router = APIRouter(
 )
 
 db_dependency = Annotated[Session, Depends(get_db)]
+oauth2_bearer = OAuth2PasswordBearer(tokenUrl='token')
+
+
 
 
 class UserRequestModel(BaseModel):
@@ -31,6 +34,20 @@ class UserRequestModel(BaseModel):
     role: str
     creation_date: datetime
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get('email')
+        user_id: int = payload.get('id')
+        if email is None or user_id is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Could not validate user')
+        return {'email': email, 'id': user_id}
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Could not validate user')
 
 def authenticate_user(email: str, password: str, db):
     user = db.query(User).filter(User.email == email).first()
@@ -60,7 +77,7 @@ async def create_user(db: db_dependency, user_request: UserRequestModel):
     db.add(create_user_model)
     db.commit()
 
-@router.post('/token')
+@router.post('/token', response_model=Token)
 async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: db_dependency):
     print("form_data.username: ",form_data.username)
     user = authenticate_user(form_data.username, form_data.password, db)
@@ -68,5 +85,5 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
         return HTTPException(status_code=404, detail='Failed Authentication')
     token = create_access_token(user.email, user.user_id, timedelta(minutes=20))
 
-    return token
+    return {'access_token': token, 'token_type': 'bearer'}
 
