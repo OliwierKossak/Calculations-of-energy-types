@@ -22,7 +22,7 @@ router = APIRouter(
 )
 
 db_dependency = Annotated[Session, Depends(get_db)]
-oauth2_bearer = OAuth2PasswordBearer(tokenUrl='token')
+oauth2_bearer = OAuth2PasswordBearer(tokenUrl='/auth/token')
 
 
 
@@ -46,6 +46,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
         if email is None or user_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Could not validate user')
         return {'email': email, 'id': user_id}
+
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Could not validate user')
 
@@ -58,7 +59,7 @@ def authenticate_user(email: str, password: str, db):
     return user
 
 def create_access_token(email: str, user_id: int, expires_delta: timedelta):
-    encode = {'sub': email, 'id': user_id}
+    encode = {'email': email, 'id': user_id}
     expires = datetime.now(timezone.utc) + expires_delta
     encode.update({'exp': expires})
     return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -82,7 +83,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     print("form_data.username: ",form_data.username)
     user = authenticate_user(form_data.username, form_data.password, db)
     if not user:
-        return HTTPException(status_code=404, detail='Failed Authentication')
+        return HTTPException(status_code=401, detail='Failed Authentication')
     token = create_access_token(user.email, user.user_id, timedelta(minutes=20))
 
     return {'access_token': token, 'token_type': 'bearer'}

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile
 from datetime import timedelta, timezone
-from ..models import User
+from ..models import Data
+from io import BytesIO
 from pydantic import BaseModel, Field
 from typing import Annotated, Optional
 from sqlalchemy.orm import Session
@@ -23,11 +24,14 @@ user_dependency = Annotated[dict, Depends(get_current_user)]
 
 @router.post("/upload_data", status_code=status.HTTP_201_CREATED)
 async def save_excel_data_to_db(file: UploadFile,user: user_dependency, db: db_dependency):
+    if user is None:
+        raise HTTPException(status_code=401, detail='Not Authenticated')
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail='Format of file need to be .xlsx or .xls')
-
+    print(user)
     try:
-        df = pd.read_excel(file.file)
+        file_bytes = file.file.read()
+        df = pd.read_excel(BytesIO(file_bytes))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error during loading file: {e}")
 
@@ -43,4 +47,13 @@ async def save_excel_data_to_db(file: UploadFile,user: user_dependency, db: db_d
 
     flattened_data_from_file = []
 
+    for _, row in df.iterrows():
+        for v_col, t_col in column_pairs:
+            if pd.notna(row[v_col]) and pd.notna(row[t_col]):
+                flattened_data_from_file.append(Data(energy_consumption=row[v_col],
+                                                     energy_type=row[t_col],
+                                                     user_id=user.get("id")))
+
+    db.add_all(flattened_data_from_file)
+    db.commit()
 
